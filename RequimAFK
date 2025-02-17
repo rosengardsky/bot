@@ -15,11 +15,11 @@ class ModuleConfig:
         self.afk_entry_message = "Режим AFK включён. Время: {time}"
         self.afk_exit_message = "Режим AFK выключен."
 
-    def set_afk_text(self, text):
-        self.afk_text = text
-
     def get_afk_text(self):
         return self.afk_text
+
+    def set_afk_text(self, text):
+        self.afk_text = text
 
 @loader.tds
 class RequimAFK(loader.Module):
