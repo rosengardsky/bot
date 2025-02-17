@@ -6,6 +6,7 @@
 import asyncio
 from datetime import datetime
 from .. import loader, utils
+from telethon.tl.functions.account import UpdateProfile
 
 @loader.tds
 class RequimAFK(loader.Module):
@@ -47,7 +48,7 @@ class RequimAFK(loader.Module):
         current_me = await self._client.get_me()
         self.original_nick = current_me.first_name  # Сохраняем оригинальный ник
         new_nick = f"{self.config['afk_status']}{self.original_nick}"
-        await self._client.edit_profile(first_name=new_nick)
+        await self._client(UpdateProfile(first_name=new_nick))
 
         # Уведомление об активации AFK
         entry_message = self.config["afk_entry_message"].format(time=self.start_time.strftime('%H:%M:%S'))
@@ -62,7 +63,7 @@ class RequimAFK(loader.Module):
 
         self.afk_mode = False
         # Устанавливаем статус обратно
-        await self._client.edit_profile(first_name=self.original_nick)
+        await self._client(UpdateProfile(first_name=self.original_nick))
 
         # Уведомление о отключении AFK
         exit_message = self.config["afk_exit_message"]
@@ -76,7 +77,7 @@ class RequimAFK(loader.Module):
             await utils.answer(message, "Вы не указали новый статус.")
             return
 
-        await self._client.edit_profile(first_name=new_status)
+        await self._client(UpdateProfile(first_name=new_status))
         await utils.answer(message, f"Статус установлен на: {new_status}")
 
     @loader.command(alias="reas")
@@ -95,14 +96,3 @@ class RequimAFK(loader.Module):
         elapsed_time_str = str(elapsed_time).split('.')[0]  # Форматируем время
         afk_message = f"Я ушёл в AFK {elapsed_time_str} назад. Причина: {reason}"
         await utils.answer(message, afk_message)
-
-    @loader.command(alias="delstatus")
-    async def del_status_cmd(self, message):
-        """Удаляет установленный статус из ника."""
-        if not self.afk_mode:
-            await utils.answer(message, "Вы не в режиме AFK.")
-            return
-
-        await self._client.edit_profile(first_name=self.original_nick)
-        await utils.answer(message, f"Статус удалён. Ник возвращён к: {self.original_nick}")
-        self.afk_mode = False  # Выключаем режим AFK после удаления статуса
