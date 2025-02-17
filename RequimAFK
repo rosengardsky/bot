@@ -7,6 +7,20 @@ import asyncio
 from datetime import datetime
 from .. import loader, utils
 
+class ModuleConfig:
+    def __init__(self):
+        self.afk_text = "Я сейчас не у компьютера (AFK)."
+        self.afk_reason = ""
+        self.afk_status = "AFK|| "
+        self.afk_entry_message = "Режим AFK включён. Время: {time}"
+        self.afk_exit_message = "Режим AFK выключен."
+
+    def set_afk_text(self, text):
+        self.afk_text = text
+
+    def get_afk_text(self):
+        return self.afk_text
+
 @loader.tds
 class RequimAFK(loader.Module):
     """Модуль для управления статусом AFK."""
@@ -21,13 +35,7 @@ class RequimAFK(loader.Module):
     }
 
     def __init__(self):
-        self.config = loader.ModuleConfig(
-            loader.ConfigValue("afk_text", "Я не здесь, напишите позже.", doc=self.strings["cfg_afk_text"]),
-            loader.ConfigValue("afk_reason", "", doc=self.strings["cfg_afk_reason"]),
-            loader.ConfigValue("afk_status", "AFK|| ", doc=self.strings["cfg_afk_status"]),
-            loader.ConfigValue("afk_entry_message", "Режим AFK включён. Время: {time}", doc=self.strings["cfg_afk_entry_message"]),
-            loader.ConfigValue("afk_exit_message", "Режим AFK выключен.", doc=self.strings["cfg_afk_exit_message"])
-        )
+        self.config = ModuleConfig()
         self.afk_mode = False
         self.start_time = None
         self.original_nick = None
@@ -40,7 +48,7 @@ class RequimAFK(loader.Module):
         """Включает режим AFK и отправляет сообщение."""
         self.afk_mode = True
         self.start_time = datetime.now()
-        afk_message = f"{self.config.afk_text}\nВремя AFK: {self.start_time.strftime('%H:%M:%S')}"
+        afk_message = f"{self.config.get_afk_text()}\nВремя AFK: {self.start_time.strftime('%H:%M:%S')}"
         await utils.answer(message, afk_message)
 
         # Устанавливаем новый статус
