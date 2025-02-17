@@ -11,8 +11,32 @@ from .. import loader, utils
 
 logger = logging.getLogger(__name__)
 
+class ModuleConfig:
+    def __init__(self):
+        self.afk_text = "Я сейчас не у компьютера (AFK)."
+        self.afk_entry_message = "Вы успешно вошли в AFK режим!"
+        self.afk_exit_message = "Вы успешно вышли из AFK режима!"
+
+    def get_afk_text(self):
+        return self.afk_text
+
+    def set_afk_text(self, text):
+        self.afk_text = text
+
+    def get_afk_entry_message(self):
+        return self.afk_entry_message
+
+    def set_afk_entry_message(self, message):
+        self.afk_entry_message = message
+
+    def get_afk_exit_message(self):
+        return self.afk_exit_message
+
+    def set_afk_exit_message(self, message):
+        self.afk_exit_message = message
+
 @loader.tds
-class RequimAFK(loader.Module):
+class AuroraAFKMod(loader.Module):
     """Ваш личный помощник в режиме AFK"""
 
     strings = {
@@ -26,6 +50,12 @@ class RequimAFK(loader.Module):
         "no_user": "<b><emoji document_id=5287611315588707430>❌</emoji> Не удалось получить информацию о пользователе.</b>",
         "no_previous_status": "<b><emoji document_id=5287740598399285194>😵‍💫</emoji> Предыдущий ник не найден.</b>",
     }
+
+    def __init__(self):
+        self.config = ModuleConfig()
+        self.afk_mode = False
+        self.start_time = None
+        self.original_nick = None
 
     async def client_ready(self, client, db):
         self.client = client
@@ -41,7 +71,7 @@ class RequimAFK(loader.Module):
             self._db.set(__name__, "afk", True)
         self._db.set(__name__, "gone", time.time())
         self._db.set(__name__, "ratelimit", [])
-        await utils.answer(message, self.strings["gone"])
+        await utils.answer(message, self.config.get_afk_entry_message())
 
     @loader.command(ru_doc="Выйти из режима AFK")
     async def unafk(self, message):
@@ -49,7 +79,7 @@ class RequimAFK(loader.Module):
         self._db.set(__name__, "afk", False)
         self._db.set(__name__, "gone", None)
         self._db.set(__name__, "ratelimit", [])
-        await utils.answer(message, self.strings["back"])
+        await utils.answer(message, self.config.get_afk_exit_message())
 
     @loader.command(ru_doc="Установить статус AFK")
     async def setstatus(self, message):
@@ -89,6 +119,39 @@ class RequimAFK(loader.Module):
         else:
             await utils.answer(message, self.strings["no_user"])
 
+    @loader.command(ru_doc="Установить текст для AFK")
+    async def setafktext(self, message):
+        """Установить текст для AFK состояния"""
+        new_text = utils.get_args_raw(message)
+        if not new_text:
+            await utils.answer(message, "Вы не указали новый текст для AFK.")
+            return
+        
+        self.config.set_afk_text(new_text)
+        await utils.answer(message, f"Текст AFK установлен на: {new_text}")
+
+    @loader.command(ru_doc="Установить текст уведомления о входе в AFK")
+    async def setentrymsg(self, message):
+        """Установить текст уведомления о входе в AFK"""
+        new_entry_msg = utils.get_args_raw(message)
+        if not new_entry_msg:
+            await utils.answer(message, "Вы не указали новый текст для уведомления о входе в AFK.")
+            return
+
+        self.config.set_afk_entry_message(new_entry_msg)
+        await utils.answer(message, f"Текст уведомления о входе в AFK установлен на: {new_entry_msg}")
+
+    @loader.command(ru_doc="Установить текст уведомления о выходе из AFK")
+    async def setexitmsg(self, message):
+        """Установить текст уведомления о выходе из AFK"""
+        new_exit_msg = utils.get_args_raw(message)
+        if not new_exit_msg:
+            await utils.answer(message, "Вы не указали новый текст для уведомления о выходе из AFK.")
+            return
+
+        self.config.set_afk_exit_message(new_exit_msg)
+        await utils.answer(message, f"Текст уведомления о выходе из AFK установлен на: {new_exit_msg}")
+
     async def watcher(self, message):
         if not isinstance(message, types.Message):
             return
@@ -105,19 +168,22 @@ class RequimAFK(loader.Module):
                     utils.get_chat_id(message)
                 )
                 self._db.save()
+
             user = await utils.get_user(message)
             if user.is_self or user.bot or user.verified:
                 logger.debug("User is self, bot or verified.")
                 return
+
             if self.get_afk() is False:
                 return
+
             now = datetime.datetime.now().replace(microsecond=0)
             gone = datetime.datetime.fromtimestamp(
                 self._db.get(__name__, "gone")
             ).replace(microsecond=0)
             diff = now - gone
             if afk_state is True:
-                ret = self.strings["afk"].format(diff)
+                ret = self.config.get_afk_text().format(diff)
             elif afk_state is not False:
                 ret = self.strings["afk_reason"].format(diff, afk_state)
             await utils.answer(message, ret, reply_to=message)
