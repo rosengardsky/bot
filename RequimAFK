@@ -3,24 +3,37 @@
 # meta banner: https://x0.at/Zixd.gif
 # scope: hikka_only
 
-import asyncio
+import datetime
+import logging
 import time
-from datetime import datetime
+from telethon import types, functions  # type: ignore
 from .. import loader, utils
+
+logger = logging.getLogger(__name__)
 
 class ModuleConfig:
     def __init__(self):
         self.afk_text = "Я сейчас не у компьютера (AFK)."
-        self.afk_reason = ""
-        self.afk_status = "AFK|| "
-        self.afk_entry_message = "Режим AFK включён. Время: {time}"
-        self.afk_exit_message = "Режим AFK выключен."
+        self.afk_entry_message = "Вы успешно вошли в AFK режим!"
+        self.afk_exit_message = "Вы успешно вышли из AFK режима!"
 
     def get_afk_text(self):
         return self.afk_text
 
     def set_afk_text(self, text):
         self.afk_text = text
+
+    def get_afk_entry_message(self):
+        return self.afk_entry_message
+
+    def set_afk_entry_message(self, message):
+        self.afk_entry_message = message
+
+    def get_afk_exit_message(self):
+        return self.afk_exit_message
+
+    def set_afk_exit_message(self, message):
+        self.afk_exit_message = message
 
 @loader.tds
 class RequimAFK(loader.Module):
@@ -32,7 +45,10 @@ class RequimAFK(loader.Module):
         "back": "<b>Вы успешно вышли из AFK режима!</b>",
         "afk": "<b>Сейчас я нахожусь в AFK\nБыл в сети <code>{}</code> назад</b>",
         "afk_reason": "<b>Сейчас я нахожусь в AFK\nБыл в сети <code>{}</code> назад\nПричина: <i>{}</i></b>",
-        "no_user": "<b>Не удалось получить информацию о пользователе.</b>"
+        "status_added": "<b>Статус успешно установлен!</b>",
+        "status_removed": "<b>Статус успешно удалён!</b>",
+        "no_user": "<b>Не удалось получить информацию о пользователе.</b>",
+        "no_previous_status": "<b>Предыдущий ник не найден.</b>",
     }
 
     def __init__(self):
@@ -45,38 +61,75 @@ class RequimAFK(loader.Module):
         self._client = client
         self._db = db
 
-    @loader.command()
+    @loader.command(ru_doc="[reason] - Установить режим AFK")
     async def afk(self, message):
-        """Включает режим AFK."""
+        """[reason] - Установить режим AFK"""
+        if utils.get_args_raw(message):
+            self._db.set(__name__, "afk", utils.get_args_raw(message))
+        else:
+            self._db.set(__name__, "afk", True)
+        self.start_time = datetime.datetime.now()
         self.afk_mode = True
-        self.start_time = datetime.now()
-        await utils.answer(message, self.strings["gone"])
-        
+        await utils.answer(message, self.config.get_afk_entry_message())
+
         current_me = await self._client.get_me()
         self.original_nick = current_me.first_name
-        new_nick = f"{self.config.afk_status}{self.original_nick}"
+        new_nick = f"{self.config.afk_text} {self.original_nick}"
         await self._client.edit_profile(first_name=new_nick)
 
-    @loader.command()
+    @loader.command(ru_doc="Выйти из режима AFK")
     async def unafk(self, message):
-        """Выключает режим AFK."""
+        """Выход из режима AFK"""
         if not self.afk_mode:
             await utils.answer(message, "Вы не находитесь в режиме AFK.")
             return
 
         self.afk_mode = False
         await self._client.edit_profile(first_name=self.original_nick)
-        await utils.answer(message, self.strings["back"])
+        await utils.answer(message, self.config.get_afk_exit_message())
 
     async def watcher(self, message):
         """Следит за упоминаниями бота."""
         if not isinstance(message, types.Message):
             return
-        if message.mentioned or getattr(message.to_id, "user_id", None) == await self._client.get_me().id:
+        if message.mentioned or getattr(message.to_id, "user_id", None) == self._client.get_me().id:
             if not self.afk_mode:
                 return
-            now = datetime.now()
+            now = datetime.datetime.now()
             elapsed_time = now - self.start_time
             elapsed_time_str = str(elapsed_time).split('.')[0]  # Убираем миллисекунды
             afk_message = self.strings["afk"].format(elapsed_time_str)
             await utils.answer(message, afk_message)
+
+    @loader.command(ru_doc="Установить текст для AFK состояния")
+    async def setafktext(self, message):
+        """Установить текст для AFK состояния"""
+        new_text = utils.get_args_raw(message)
+        if not new_text:
+            await utils.answer(message, "Вы не указали новый текст для AFK.")
+            return
+        
+        self.config.set_afk_text(new_text)
+        await utils.answer(message, f"Текст AFK установлен на: {new_text}")
+
+    @loader.command(ru_doc="Установить текст уведомления о входе в AFK")
+    async def setentrymsg(self, message):
+        """Установить текст уведомления о входе в AFK"""
+        new_entry_msg = utils.get_args_raw(message)
+        if not new_entry_msg:
+            await utils.answer(message, "Вы не указали новый текст для уведомления о входе в AFK.")
+            return
+
+        self.config.set_afk_entry_message(new_entry_msg)
+        await utils.answer(message, f"Текст уведомления о входе в AFK установлен на: {new_entry_msg}")
+
+    @loader.command(ru_doc="Установить текст уведомления о выходе из AFK")
+    async def setexitmsg(self, message):
+        """Установить текст уведомления о выходе из AFK"""
+        new_exit_msg = utils.get_args_raw(message)
+        if not new_exit_msg:
+            await utils.answer(message, "Вы не указали новый текст для уведомления о выходе из AFK.")
+            return
+
+        self.config.set_afk_exit_message(new_exit_msg)
+        await utils.answer(message, f"Текст уведомления о выходе из AFK установлен на: {new_exit_msg}")
