@@ -92,9 +92,12 @@ class RequimAFK(loader.Module):
         """Следит за упоминаниями бота."""
         if not isinstance(message, types.Message):
             return
-        if message.mentioned or getattr(message.to_id, "user_id", None) == self._client.get_me().id:
+        
+        me = await self._client.get_me()  # Теперь здесь используется await
+        if message.mentioned or getattr(message.to_id, "user_id", None) == me.id:
             if not self.afk_mode:
                 return
+            
             now = datetime.datetime.now()
             elapsed_time = now - self.start_time
             elapsed_time_str = str(elapsed_time).split('.')[0]  # Убираем миллисекунды
