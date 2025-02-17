@@ -1,0 +1,93 @@
+# -*- coding: utf-8 -*-
+# meta developer: разрушая мечты RequiMods
+# meta banner: https://x0.at/Zixd.gif
+# scope: hikka_only
+
+import asyncio
+from datetime import datetime
+from .. import loader, utils
+
+@loader.tds
+class RequimAFKmod(loader.Module):
+    """Модуль для управления статусом AFK."""
+
+    strings = {
+        "name": "RequimAFK",
+        "cfg_afk_text": "Текст для статуса AFK",
+        "cfg_afk_reason": "Причина для статуса AFK",
+        "cfg_afk_status": "Статус пользователя при AFK",
+        "afk_enabled": "Режим AFK включён. Время: {time}",
+        "afk_disabled": "Режим AFK выключен."
+    }
+
+    def __init__(self):
+        self.config = loader.ModuleConfig(
+            loader.ConfigValue("afk_text", "Я не здесь, напишите позже.", doc=self.strings["cfg_afk_text"]),
+            loader.ConfigValue("afk_reason", "", doc=self.strings["cfg_afk_reason"]),
+            loader.ConfigValue("afk_status", "AFK|| ", doc=self.strings["cfg_afk_status"])
+        )
+        self.afk_mode = False
+        self.start_time = None
+
+    async def client_ready(self, client, db):
+        self._client = client
+
+    @loader.command(alias="afk")
+    async def afk_cmd(self, message):
+        """Включает режим AFK и отправляет сообщение."""
+        self.afk_mode = True
+        self.start_time = datetime.now()
+        afk_message = f"{self.config['afk_text']}\nВремя AFK: {self.start_time.strftime('%H:%M:%S')}"
+        await utils.answer(message, afk_message)
+
+        # Устанавливаем новый статус
+        current_nick = await self._client.get_me()
+        new_nick = f"{self.config['afk_status']}{current_nick.username}" if current_nick.username else self.config['afk_status']
+        await self._client(EditProfile(first_name=new_nick))
+
+        # Уведомление об активации AFK
+        await self._client.send_message(message.peer_id, self.strings["afk_enabled"].format(time=self.start_time.strftime('%H:%M:%S')))
+
+    @loader.command(alias="afkstop")
+    async def afk_stop_cmd(self, message):
+        """Выключает режим AFK и уведомляет об этом."""
+        if not self.afk_mode:
+            await utils.answer(message, "Вы не находитесь в режиме AFK.")
+            return
+
+        self.afk_mode = False
+        # Устанавливаем статус обратно
+        current_nick = await self._client.get_me()
+        original_nick = current_nick.first_name.replace(f"{self.config['afk_status']}", "")
+        await self._client(EditProfile(first_name=original_nick))
+
+        # Уведомление о отключении AFK
+        await self._client.send_message(message.peer_id, self.strings["afk_disabled"])
+
+    @loader.command(alias="setstatus")
+    async def set_status_cmd(self, message):
+        """Устанавливает новый статус (ник)."""
+        new_status = utils.get_args_raw(message)
+        if not new_status:
+            await utils.answer(message, "Вы не указали новый статус.")
+            return
+
+        await self._client(EditProfile(first_name=new_status))
+        await utils.answer(message, f"Статус установлен на: {new_status}")
+
+    @loader.command(alias="reas")
+    async def reason_cmd(self, message):
+        """Добавляет причину к статусу AFK."""
+        reason = utils.get_args_raw(message)
+        if not reason:
+            await utils.answer(message, "Вы не указали причину.")
+            return
+        
+        if not self.afk_mode:
+            await utils.answer(message, "Вы не в режиме AFK.")
+            return
+
+        elapsed_time = datetime.now() - self.start_time
+        elapsed_time_str = str(elapsed_time).split('.')[0]  # Форматируем время
+        afk_message = f"Я ушёл в AFK {elapsed_time_str} назад. Причина: {reason}"
+        await utils.answer(message, afk_message)
