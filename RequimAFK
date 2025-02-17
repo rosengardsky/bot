@@ -8,11 +8,11 @@ from datetime import datetime
 from .. import loader, utils
 
 @loader.tds
-class AFKModule(loader.Module):
+class RequimAFKmod(loader.Module):
     """Модуль для управления статусом AFK."""
 
     strings = {
-        "name": "AFKModule",
+        "name": "RequimAFK",
         "cfg_afk_text": "Текст для статуса AFK",
         "cfg_afk_reason": "Причина для статуса AFK",
         "cfg_afk_status": "Статус пользователя при AFK",
