@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# meta developer: разрушая мечты RequiMods
+# meta developer: RequiMods разрушая мечты
 # meta banner: https://x0.at/Zixd.gif
 # scope: hikka_only
 
@@ -8,7 +8,7 @@ from datetime import datetime
 from .. import loader, utils
 
 @loader.tds
-class RequimAFKmod(loader.Module):
+class RequimAFK(loader.Module):
     """Модуль для управления статусом AFK."""
 
     strings = {
@@ -30,6 +30,7 @@ class RequimAFKmod(loader.Module):
         )
         self.afk_mode = False
         self.start_time = None
+        self.original_nick = None
 
     async def client_ready(self, client, db):
         self._client = client
@@ -43,9 +44,10 @@ class RequimAFKmod(loader.Module):
         await utils.answer(message, afk_message)
 
         # Устанавливаем новый статус
-        current_nick = await self._client.get_me()
-        new_nick = f"{self.config['afk_status']}{current_nick.username}" if current_nick.username else self.config['afk_status']
-        await self._client(EditProfile(first_name=new_nick))
+        current_me = await self._client.get_me()
+        self.original_nick = current_me.first_name  # Сохраняем оригинальный ник
+        new_nick = f"{self.config['afk_status']}{self.original_nick}"
+        await self._client.edit_profile(first_name=new_nick)
 
         # Уведомление об активации AFK
         entry_message = self.config["afk_entry_message"].format(time=self.start_time.strftime('%H:%M:%S'))
@@ -60,9 +62,7 @@ class RequimAFKmod(loader.Module):
 
         self.afk_mode = False
         # Устанавливаем статус обратно
-        current_nick = await self._client.get_me()
-        original_nick = current_nick.first_name.replace(f"{self.config['afk_status']}", "")
-        await self._client(EditProfile(first_name=original_nick))
+        await self._client.edit_profile(first_name=self.original_nick)
 
         # Уведомление о отключении AFK
         exit_message = self.config["afk_exit_message"]
@@ -76,7 +76,7 @@ class RequimAFKmod(loader.Module):
             await utils.answer(message, "Вы не указали новый статус.")
             return
 
-        await self._client(EditProfile(first_name=new_status))
+        await self._client.edit_profile(first_name=new_status)
         await utils.answer(message, f"Статус установлен на: {new_status}")
 
     @loader.command(alias="reas")
@@ -95,3 +95,14 @@ class RequimAFKmod(loader.Module):
         elapsed_time_str = str(elapsed_time).split('.')[0]  # Форматируем время
         afk_message = f"Я ушёл в AFK {elapsed_time_str} назад. Причина: {reason}"
         await utils.answer(message, afk_message)
+
+    @loader.command(alias="delstatus")
+    async def del_status_cmd(self, message):
+        """Удаляет установленный статус из ника."""
+        if not self.afk_mode:
+            await utils.answer(message, "Вы не в режиме AFK.")
+            return
+
+        await self._client.edit_profile(first_name=self.original_nick)
+        await utils.answer(message, f"Статус удалён. Ник возвращён к: {self.original_nick}")
+        self.afk_mode = False  # Выключаем режим AFK после удаления статуса
